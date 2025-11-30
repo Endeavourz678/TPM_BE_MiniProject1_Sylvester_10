@@ -24,7 +24,6 @@ const writeJSON = (p, data) => {
   fs.writeFileSync(p, JSON.stringify(data, null, 2), 'utf8');
 };
 
-/* Events */
 exports.listEvents = (req, res) => {
   const data = readJSON(EVENTS_FILE, { events: [] });
   res.json(data.events || []);
@@ -77,18 +76,16 @@ exports.submitFeedback = (req, res) => {
 
     const { name, visitorType, employeeId, email, eventId, ratings, saran, kritik } = req.body || {};
 
-    // basic validations
+
     if (!name || !email || (eventId === undefined || eventId === null)) {
       return res.status(400).json({ message: 'name, email, and eventId are required' });
     }
 
-    // parse/normalize eventId to number
     const numericEventId = Number(eventId);
     if (Number.isNaN(numericEventId)) {
       return res.status(400).json({ message: 'eventId must be a number' });
     }
 
-    // parse ratings if string
     let parsedRatings = ratings;
     if (typeof parsedRatings === 'string') {
       try { parsedRatings = JSON.parse(parsedRatings); } catch (err) {
@@ -100,23 +97,19 @@ exports.submitFeedback = (req, res) => {
       return res.status(400).json({ message: 'ratings required (object)' });
     }
 
-    // require employeeId when internal
     if (visitorType === 'internal' && (!employeeId || String(employeeId).trim() === '')) {
       return res.status(400).json({ message: 'employeeId is required for internal visitors' });
     }
 
-    // ensure events file exists and eventId valid
     const eventsData = readJSON(EVENTS_FILE, { lastId: 0, events: [] });
     const eventsArr = eventsData && eventsData.events ? eventsData.events : [];
     if (!eventsArr.find(e => Number(e.id) === numericEventId)) {
       return res.status(400).json({ message: 'eventId not found' });
     }
 
-    // read feedback file safely
     const fbData = readJSON(FB_FILE, { lastId: 0, items: [] });
     fbData.items = fbData.items || [];
 
-    // auto-increment id (make sure lastId exists)
     fbData.lastId = (typeof fbData.lastId === 'number') ? fbData.lastId : 0;
     const newId = fbData.lastId + 1;
     fbData.lastId = newId;
@@ -136,7 +129,6 @@ exports.submitFeedback = (req, res) => {
 
     fbData.items.push(item);
 
-    // write back (wrap in try/catch)
     try {
       writeJSON(FB_FILE, fbData);
     } catch (writeErr) {
@@ -144,7 +136,6 @@ exports.submitFeedback = (req, res) => {
       return res.status(500).json({ message: 'could not save feedback' });
     }
 
-    // respond with created item
     return res.json({ message: 'ok', item });
   } catch (err) {
     console.error('submitFeedback unexpected error', err);
@@ -158,13 +149,11 @@ exports.listFeedback = (req, res) => {
     const fbData = readJSON(FB_FILE, { lastId: 0, items: [] });
     let out = (fbData.items || []).slice();
 
-    // normalize eventId: accept string or number
     if (eventId !== undefined && eventId !== null && String(eventId).trim() !== '') {
       const numeric = Number(eventId);
       if (!Number.isNaN(numeric)) {
         out = out.filter(i => Number(i.eventId) === numeric);
       } else {
-        // fallback to string comparison (in case IDs are strings)
         out = out.filter(i => String(i.eventId) === String(eventId));
       }
     }

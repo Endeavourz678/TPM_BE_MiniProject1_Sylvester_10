@@ -1,38 +1,32 @@
-/* === FINAL: force-center + clean form style (override common frameworks) === */
-
 * { box-sizing: border-box; }
 
-/* body: tambahin padding horizontal dan center page content */
 body {
   margin: 0;
-  padding: 18px;              /* jarak dari tepi browser */
+  padding: 18px;              
   display: flex;
-  justify-content: center;   /* center horizontally */
+  justify-content: center;  
   background: #f7f8fa;
   font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
   color: #111827;
   -webkit-font-smoothing: antialiased;
 }
 
-/* main wrapper / fallback - pakai kalau HTML belum punya .container */
 .site-center,
 .container,
 main,
 form {
   width: 100%;
-  max-width: 760px;   /* sweet spot */
+  max-width: 760px;  
   margin: 0 auto;
   padding: 18px;
 }
 
-/* jika HTMLmu pakai .container dari framework, atur ulang sedikit */
 .container {
   box-shadow: none;
   background: transparent;
   padding-top: 0;
 }
 
-/* card / panel look minimal */
 .card, .panel {
   background: #ffffff;
   border: 1px solid #e6e8eb;
@@ -41,14 +35,12 @@ form {
   margin-bottom: 18px;
 }
 
-/* Heading */
 h1 {
   margin: 4px 0 12px;
   font-size: 1.8rem;
   font-weight: 700;
 }
 
-/* form fields: full width inside the centered container */
 input[type="text"],
 input[type="email"],
 input[type="number"],
@@ -66,13 +58,11 @@ textarea,
   box-shadow: none;
 }
 
-/* fokus */
 input:focus, select:focus, textarea:focus {
   border-color: #6366f1;
   box-shadow: 0 0 0 6px rgba(99,102,241,0.08);
 }
 
-/* label / section titles */
 label {
   display: block;
   margin-top: 14px;
@@ -81,7 +71,6 @@ label {
   color: #111827;
 }
 
-/* tombol */
 button, .btn {
   display: inline-block;
   padding: 10px 16px;
@@ -95,15 +84,12 @@ button, .btn {
 }
 button:hover { background: #4338ca; }
 
-/* bantu override width yang bikin full-viewport (misalnya kelas .w-100 di framework) */
 .w-100, .full-width {
   width: auto !important;
 }
 
-/* Pastikan elemen besar (seperti selects custom) tetap responsif */
 select, textarea { min-height: 44px; }
 
-/* Responsive: kurangi padding di layar kecil */
 @media (max-width: 600px) {
   body { padding: 12px; }
   .site-center, .container, form { padding: 12px; max-width: 100%; }
