@@ -53,13 +53,21 @@ exports.createEvent = (req, res) => {
 };
 
 exports.deleteEvent = (req, res) => {
-  const id = Number(req.params.id);
-  const data = readJSON(EVENTS_FILE, { lastId: 0, events: [] });
-
-  data.events = data.events.filter(e => e.id !== id);
-
-  writeJSON(EVENTS_FILE, data);
-  res.json({ ok: true });
+  try {
+    const rawId = req.params.id;
+    const data = readJSON(EVENTS_FILE, { lastId: 0, events: [] });
+    const idNum = Number(rawId);
+    if (!Number.isNaN(idNum)) {
+      data.events = (data.events || []).filter(e => Number(e.id) !== idNum);
+    } else {
+      data.events = (data.events || []).filter(e => String(e.id) !== String(rawId));
+    }
+    writeJSON(EVENTS_FILE, data);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('deleteEvent error', err);
+    return res.status(500).json({ message: 'internal error' });
+  }
 };
 
 
@@ -177,11 +185,21 @@ exports.listFeedback = (req, res) => {
 };
 
 exports.deleteFeedback = (req, res) => {
-  const id = req.params.id;
-  const fb = readJSON(FB_FILE, { items: [] });
-  fb.items = (fb.items || []).filter(i => i.id !== id);
-  writeJSON(FB_FILE, fb);
-  res.json({ ok: true });
+  try {
+    const rawId = req.params.id;
+    const fb = readJSON(FB_FILE, { lastId: 0, items: [] });
+    const idNum = Number(rawId);
+    if (!Number.isNaN(idNum)) {
+      fb.items = (fb.items || []).filter(i => Number(i.id) !== idNum);
+    } else {
+      fb.items = (fb.items || []).filter(i => String(i.id) !== String(rawId));
+    }
+    writeJSON(FB_FILE, fb);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('deleteFeedback error', err);
+    return res.status(500).json({ message: 'internal error' });
+  }
 };
 
 exports.exportFeedback = (req, res) => {

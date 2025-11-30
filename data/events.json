@@ -1,17 +1,4 @@
 {
   "lastId": 2,
-  "events": [
-    {
-      "id": 1,
-      "title": "Event A",
-      "description": "",
-      "createdAt": "..."
-    },
-    {
-      "id": 2,
-      "title": "b",
-      "description": "",
-      "createdAt": "2025-11-30T15:18:21.934Z"
-    }
-  ]
+  "events": []
 }
