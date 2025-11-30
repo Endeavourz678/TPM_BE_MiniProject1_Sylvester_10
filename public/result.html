@@ -1,0 +1,139 @@
+<!DOCTYPE HTML
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Feedback</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <h1>Feedback untuk Event Terakhir</h1>
+  <p>
+    <a href="/form.html">Submit another</a> |
+    <a href="/admin/index.html">Admin</a>
+  </p>
+
+  <div id="status">Loading...</div>
+  <h2 id="eventTitle"></h2>
+
+  <div id="noData" style="display:none">
+    <p>Tidak ada feedback untuk event ini (atau kamu belum submit dari browser ini).</p>
+  </div>
+
+  <div id="list"></div>
+
+  <script>
+    function esc(s) {
+      return String(s || '').replace(/[&<>"']/g, m => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[m]));
+    }
+
+    async function loadForLastEvent() {
+      const raw = localStorage.getItem('lastSubmittedEventId');
+
+      const statusEl = document.getElementById('status');
+      const titleEl = document.getElementById('eventTitle');
+      const listEl = document.getElementById('list');
+      const noDataEl = document.getElementById('noData');
+
+      if (!raw) {
+        statusEl.textContent = '';
+        titleEl.textContent = 'Tidak ada event terakhir.';
+        noDataEl.style.display = 'block';
+        return;
+      }
+
+      const eventId = Number(raw);
+      if (Number.isNaN(eventId)) {
+        statusEl.textContent = '';
+        titleEl.textContent = 'Event: (invalid)';
+        noDataEl.style.display = 'block';
+        return;
+      }
+
+      statusEl.textContent = 'Loading event info...';
+
+      // fetch events to get title
+      let events = [];
+      try {
+        const ev = await fetch('/api/events');
+        if (ev.ok) events = await ev.json();
+      } catch (e) {
+        console.error('fetch events', e);
+      }
+
+      const map = {};
+      (events || []).forEach(e => {
+        map[Number(e.id)] = e.title || ('Event ' + e.id);
+      });
+
+      titleEl.textContent = map[eventId]
+        ? ('Event: ' + map[eventId])
+        : ('Event ID: ' + eventId);
+
+      statusEl.textContent = 'Loading feedback...';
+
+      try {
+        const fbRes = await fetch('/api/feedback?eventId=' + encodeURIComponent(eventId));
+        if (!fbRes.ok) {
+          statusEl.textContent = 'Gagal memuat feedback.';
+          return;
+        }
+
+        const items = await fbRes.json();
+        statusEl.textContent = '';
+
+        if (!items || items.length === 0) {
+          noDataEl.style.display = 'block';
+          listEl.innerHTML = '';
+          return;
+        }
+
+        noDataEl.style.display = 'none';
+
+        listEl.innerHTML = items.map(it => {
+          const when = it.createdAt
+            ? new Date(it.createdAt).toLocaleString()
+            : '';
+
+          const ratings = it.ratings
+            ? Object.entries(it.ratings)
+                .map(([k, v]) => `<strong>${esc(k)}</strong>: ${esc(v)}`)
+                .join(' | ')
+            : '';
+
+          return `
+            <div class="card">
+              <div><strong>${esc(it.name)}</strong></div>
+              <div class="meta">
+                ${esc(it.email)} —
+                ${esc(it.visitorType || '')} —
+                ${esc(when)}
+              </div>
+              <div style="margin-top:8px">${ratings}</div>
+              <div style="margin-top:8px">
+                <strong>Saran:</strong> ${esc(it.saran || '-')}
+              </div>
+              <div>
+                <strong>Kritik:</strong> ${esc(it.kritik || '-')}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Error loading feedback.';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadForLastEvent);
+  </script>
+
+</body>
+</html>

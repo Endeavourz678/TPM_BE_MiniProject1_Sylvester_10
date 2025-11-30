@@ -1,0 +1,173 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Rate Event</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <h1>Rate Event</h1>
+
+  <form id="frm">
+
+    <div>
+      <label>
+        Name*: 
+        <input name="name" required>
+      </label>
+    </div>
+
+    <div>
+      <label>
+        Visitor Type:
+        <select name="visitorType" id="visitorType">
+          <option value="umum">Umum</option>
+          <option value="internal">Internal</option>
+        </select>
+      </label>
+    </div>
+
+    <div id="employeeDiv" style="display:none;">
+      <label>
+        No Induk Karyawan:
+        <input name="employeeId" id="employeeId">
+      </label>
+    </div>
+
+    <div>
+      <label>
+        Email*:
+        <input name="email" type="email" required>
+      </label>
+    </div>
+
+    <div>
+      <label>
+        Event:
+        <select name="eventId" id="eventSelect" required></select>
+      </label>
+    </div>
+
+    <h3>Ratings (1-5)</h3>
+
+    <div>
+      <label>
+        Overall:
+        <input name="ratings_overall" type="number" min="1" max="5" value="5" required>
+      </label>
+    </div>
+
+    <div>
+      <label>
+        Content:
+        <input name="ratings_content" type="number" min="1" max="5" value="5" required>
+      </label>
+    </div>
+
+    <div>
+      <label>
+        Logistics:
+        <input name="ratings_logistics" type="number" min="1" max="5" value="5" required>
+      </label>
+    </div>
+
+    <div>
+      <label>
+        Saran:
+        <textarea name="saran"></textarea>
+      </label>
+    </div>
+
+    <div>
+      <label>
+        Kritik:
+        <textarea name="kritik"></textarea>
+      </label>
+    </div>
+
+    <button type="submit">Submit</button>
+
+  </form>
+
+  <script>
+    document.getElementById('visitorType').addEventListener('change', function () {
+      document.getElementById('employeeDiv').style.display =
+        this.value === 'internal' ? 'block' : 'none';
+    });
+
+    async function loadEvents() {
+      const res = await fetch('/api/events');
+      const events = await res.json();
+      const sel = document.getElementById('eventSelect');
+      sel.innerHTML = events
+        .map(e => `<option value="${e.id}">${e.title}</option>`)
+        .join('');
+    }
+    loadEvents();
+
+    // utility to push id into localStorage array
+    function saveLastSubmittedItem(item) {
+      try {
+        localStorage.setItem('lastSubmittedItem', JSON.stringify(item));
+      } catch (e) {
+        console.error('saveLastSubmittedItem error', e);
+      }
+    }
+
+    document.getElementById('frm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const form = new FormData(this);
+      const eventId = Number(form.get('eventId'));
+
+      const body = {
+        name: form.get('name'),
+        visitorType: form.get('visitorType'),
+        employeeId: form.get('employeeId') || '',
+        email: form.get('email'),
+        eventId,
+        ratings: {
+          overall: Number(form.get('ratings_overall')),
+          content: Number(form.get('ratings_content')),
+          logistics: Number(form.get('ratings_logistics'))
+        },
+        saran: form.get('saran') || '',
+        kritik: form.get('kritik') || ''
+      };
+
+      try {
+        const res = await fetch('/api/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+
+        if (!res.ok) {
+          const txt = await res.text().catch(() => null);
+          alert('Submit failed: ' + (txt || res.status));
+          return;
+        }
+
+        const data = await res.json().catch(() => null);
+        const item = data && data.item ? data.item : null;
+
+        // save the created item to localStorage (so result page will show only this)
+        if (item) {
+          saveLastSubmittedItem(item);
+          // also store lastSubmittedEventId for compatibility if needed
+          localStorage.setItem('lastSubmittedEventId', String(item.eventId));
+        }
+
+        // redirect to result page
+        window.location = '/result.html';
+
+      } catch (err) {
+        console.error(err);
+        alert('Network error while submitting');
+      }
+    });
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,193 @@
+const fs = require('fs');
+const path = require('path');
+const { v4: uuidv4 } = require('uuid');
+
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', '..', 'data');
+const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
+const FB_FILE = path.join(DATA_DIR, 'feedback.json');
+
+const readJSON = (p, fallback) => {
+  try {
+    if (!fs.existsSync(p)) return fallback;
+    const raw = fs.readFileSync(p, 'utf8') || '';
+    if (!raw) return fallback;
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error('readJSON error', e);
+    return fallback;
+  }
+};
+
+const writeJSON = (p, data) => {
+  const dir = path.dirname(p);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(p, JSON.stringify(data, null, 2), 'utf8');
+};
+
+/* Events */
+exports.listEvents = (req, res) => {
+  const data = readJSON(EVENTS_FILE, { events: [] });
+  res.json(data.events || []);
+};
+
+exports.createEvent = (req, res) => {
+  const { title, description } = req.body || {};
+  if (!title) return res.status(400).json({ message: 'title required' });
+
+  const data = readJSON(EVENTS_FILE, { lastId: 0, events: [] });
+
+  const newId = (data.lastId || 0) + 1;
+  data.lastId = newId;
+
+  const ev = {
+    id: newId,
+    title: title.toString().trim(),
+    description: (description || '').toString().trim(),
+    createdAt: new Date().toISOString()
+  };
+
+  data.events.push(ev);
+  writeJSON(EVENTS_FILE, data);
+
+  res.json({ ok: true, event: ev });
+};
+
+exports.deleteEvent = (req, res) => {
+  const id = Number(req.params.id);
+  const data = readJSON(EVENTS_FILE, { lastId: 0, events: [] });
+
+  data.events = data.events.filter(e => e.id !== id);
+
+  writeJSON(EVENTS_FILE, data);
+  res.json({ ok: true });
+};
+
+
+exports.submitFeedback = (req, res) => {
+  try {
+    console.log('submitFeedback called, body=', req.body);
+
+    const { name, visitorType, employeeId, email, eventId, ratings, saran, kritik } = req.body || {};
+
+    // basic validations
+    if (!name || !email || (eventId === undefined || eventId === null)) {
+      return res.status(400).json({ message: 'name, email, and eventId are required' });
+    }
+
+    // parse/normalize eventId to number
+    const numericEventId = Number(eventId);
+    if (Number.isNaN(numericEventId)) {
+      return res.status(400).json({ message: 'eventId must be a number' });
+    }
+
+    // parse ratings if string
+    let parsedRatings = ratings;
+    if (typeof parsedRatings === 'string') {
+      try { parsedRatings = JSON.parse(parsedRatings); } catch (err) {
+        console.error('ratings parse error', err);
+        return res.status(400).json({ message: 'ratings invalid JSON' });
+      }
+    }
+    if (!parsedRatings || typeof parsedRatings !== 'object') {
+      return res.status(400).json({ message: 'ratings required (object)' });
+    }
+
+    // require employeeId when internal
+    if (visitorType === 'internal' && (!employeeId || String(employeeId).trim() === '')) {
+      return res.status(400).json({ message: 'employeeId is required for internal visitors' });
+    }
+
+    // ensure events file exists and eventId valid
+    const eventsData = readJSON(EVENTS_FILE, { lastId: 0, events: [] });
+    const eventsArr = eventsData && eventsData.events ? eventsData.events : [];
+    if (!eventsArr.find(e => Number(e.id) === numericEventId)) {
+      return res.status(400).json({ message: 'eventId not found' });
+    }
+
+    // read feedback file safely
+    const fbData = readJSON(FB_FILE, { lastId: 0, items: [] });
+    fbData.items = fbData.items || [];
+
+    // auto-increment id (make sure lastId exists)
+    fbData.lastId = (typeof fbData.lastId === 'number') ? fbData.lastId : 0;
+    const newId = fbData.lastId + 1;
+    fbData.lastId = newId;
+
+    const item = {
+      id: newId,
+      eventId: numericEventId,
+      name: String(name).trim(),
+      visitorType: visitorType || 'umum',
+      employeeId: String(employeeId || '').trim(),
+      email: String(email).trim(),
+      ratings: parsedRatings,
+      saran: String(saran || '').trim(),
+      kritik: String(kritik || '').trim(),
+      createdAt: new Date().toISOString()
+    };
+
+    fbData.items.push(item);
+
+    // write back (wrap in try/catch)
+    try {
+      writeJSON(FB_FILE, fbData);
+    } catch (writeErr) {
+      console.error('writeJSON error', writeErr);
+      return res.status(500).json({ message: 'could not save feedback' });
+    }
+
+    // respond with created item
+    return res.json({ message: 'ok', item });
+  } catch (err) {
+    console.error('submitFeedback unexpected error', err);
+    return res.status(500).json({ message: 'internal error' });
+  }
+};
+
+exports.listFeedback = (req, res) => {
+  try {
+    const { eventId, visitorType, from, to, search } = req.query;
+    const fbData = readJSON(FB_FILE, { lastId: 0, items: [] });
+    let out = (fbData.items || []).slice();
+
+    // normalize eventId: accept string or number
+    if (eventId !== undefined && eventId !== null && String(eventId).trim() !== '') {
+      const numeric = Number(eventId);
+      if (!Number.isNaN(numeric)) {
+        out = out.filter(i => Number(i.eventId) === numeric);
+      } else {
+        // fallback to string comparison (in case IDs are strings)
+        out = out.filter(i => String(i.eventId) === String(eventId));
+      }
+    }
+
+    if (visitorType) out = out.filter(i => String(i.visitorType) === String(visitorType));
+    if (from) out = out.filter(i => new Date(i.createdAt) >= new Date(from));
+    if (to) out = out.filter(i => new Date(i.createdAt) <= new Date(to));
+    if (search) {
+      const q = String(search).toLowerCase();
+      out = out.filter(i => (i.saran || '').toLowerCase().includes(q) || (i.kritik || '').toLowerCase().includes(q));
+    }
+
+    res.json(out);
+  } catch (err) {
+    console.error('listFeedback error', err);
+    res.status(500).json({ message: 'internal error' });
+  }
+};
+
+exports.deleteFeedback = (req, res) => {
+  const id = req.params.id;
+  const fb = readJSON(FB_FILE, { items: [] });
+  fb.items = (fb.items || []).filter(i => i.id !== id);
+  writeJSON(FB_FILE, fb);
+  res.json({ ok: true });
+};
+
+exports.exportFeedback = (req, res) => {
+  const { eventId } = req.query;
+  const fb = readJSON(FB_FILE, { items: [] }).items || [];
+  const out = eventId ? fb.filter(i => i.eventId === eventId) : fb;
+  res.setHeader('Content-Disposition', 'attachment; filename=feedback.json');
+  res.json(out);
+};

@@ -1,0 +1,260 @@
+<!DOCTYPE HTML>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Panel</title>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: #fafafa;
+      color: #222;
+    }
+
+    h1, h2 {
+      margin-top: 0;
+      font-weight: 600;
+    }
+
+    a { color: #0066cc; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .card {
+      background: #fff;
+      border: 1px solid #ddd;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+
+    label {
+      margin-right: 10px;
+      display: inline-block;
+    }
+
+    input, select, button {
+      padding: 6px 8px;
+      margin-right: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    button {
+      cursor: pointer;
+      background: #f4f4f4;
+    }
+
+    button:hover {
+      background: #e9e9e9;
+    }
+
+    section { margin-top: 24px; }
+  </style>
+</head>
+
+<body>
+
+  <h1>Admin Panel</h1>
+  <p><a href="/index.html">Kembali ke Home</a></p>
+
+  <section>
+    <h2>Create Event</h2>
+    <form id="createForm">
+      <input name="title" placeholder="Event title" required>
+      <input name="description" placeholder="Description (optional)">
+      <button type="submit">Create</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Filter & Controls</h2>
+
+    <label>
+      Event:
+      <select id="eventSelect">
+        <option value="">-- All events --</option>
+      </select>
+    </label>
+
+    <label>
+      Visitor:
+      <select id="visitorSelect">
+        <option value="">All</option>
+        <option value="umum">Umum</option>
+        <option value="internal">Internal</option>
+      </select>
+    </label>
+
+    <input id="searchInput" placeholder="search saran/kritik">
+    <button id="applyBtn">Apply</button>
+    <button id="refreshBtn" type="button">Refresh</button>
+  </section>
+
+  <section>
+    <h2>Feedback</h2>
+    <div id="feedbackList"></div>
+  </section>
+
+  <section>
+    <h2>Events (List)</h2>
+    <div id="eventsList"></div>
+  </section>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    const esc = str =>
+      String(str || "")
+        .replace(/[&<>"']/g, c => ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          "\"": "&quot;",
+          "'": "&#39;"
+        }[c]));
+
+    async function getJSON(url) {
+      try {
+        const res = await fetch(url);
+        return res.ok ? res.json() : [];
+      } catch {
+        return [];
+      }
+    }
+
+    async function fetchEvents() {
+      return await getJSON("/api/events");
+    }
+
+    async function fetchFeedback(params) {
+      const q = new URLSearchParams();
+
+      Object.entries(params).forEach(([key, val]) => {
+        if (val) q.set(key, val);
+      });
+
+      const url = "/api/feedback" + (q.toString() ? "?" + q.toString() : "");
+      const res = await fetch(url);
+
+      if (!res.ok) throw new Error("Failed fetching feedback");
+      return res.json();
+    }
+
+    async function loadEventsIntoUI() {
+      const events = await fetchEvents();
+
+      const select = $("eventSelect");
+      select.innerHTML =
+        `<option value="">-- All events --</option>` +
+        events.map(e => `<option value="${e.id}">${esc(e.title)}</option>`).join("");
+
+      $("eventsList").innerHTML = events.length
+        ? events.map(e => `
+            <div class="card">
+              <strong>${esc(e.title)}</strong><br>
+              <small>${esc(e.description || "")}</small><br>
+              <button onclick="deleteEvent(${e.id})">Delete Event</button>
+            </div>
+          `).join("")
+        : "<p>No events yet.</p>";
+    }
+
+    async function loadFeedback() {
+      const params = {
+        eventId: $("eventSelect").value || "",
+        visitorType: $("visitorSelect").value || "",
+        search: $("searchInput").value.trim() || ""
+      };
+
+      try {
+        const list = await fetchFeedback(params);
+
+        $("feedbackList").innerHTML = list.length
+          ? list.map(item => `
+              <div class="card">
+                <div><strong>${esc(item.name)}</strong> — ${esc(item.email)} <small>(${esc(item.visitorType)})</small></div>
+                <div class="meta">${new Date(item.createdAt).toLocaleString()}</div>
+                <div style="margin-top:6px">Ratings: ${
+                  Object.entries(item.ratings || {})
+                    .map(([k, v]) => `${esc(k)}: ${esc(v)}`)
+                    .join(" | ")
+                }</div>
+                <div style="margin-top:6px"><strong>Saran:</strong> ${esc(item.saran || "-")}</div>
+                <div><strong>Kritik:</strong> ${esc(item.kritik || "-")}</div>
+                <button style="margin-top:8px" onclick="deleteFeedback(${item.id})">Delete</button>
+              </div>
+            `).join("")
+          : "<p>No feedback found.</p>";
+
+      } catch {
+        $("feedbackList").innerHTML = "<p>Error loading feedback.</p>";
+      }
+    }
+
+    // Create event
+    $("createForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+
+      const body = {
+        title: fd.get("title"),
+        description: fd.get("description")
+      };
+
+      const res = await fetch("/api/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      if (!res.ok) return alert("Create failed");
+
+      e.target.reset();
+      await loadEventsIntoUI();
+      await loadFeedback();
+    });
+
+    async function deleteEvent(id) {
+      if (!confirm("Delete this event?")) return;
+
+      const res = await fetch(`/api/events/${id}/delete`, { method: "POST" });
+      if (!res.ok) return alert("Delete failed");
+
+      await loadEventsIntoUI();
+      await loadFeedback();
+    }
+    window.deleteEvent = deleteEvent;
+
+    async function deleteFeedback(id) {
+      if (!confirm("Delete this feedback?")) return;
+
+      const res = await fetch(`/api/feedback/${id}/delete`, { method: "POST" });
+      if (!res.ok) return alert("Delete failed");
+
+      await loadFeedback();
+    }
+    window.deleteFeedback = deleteFeedback;
+
+    // Filters
+    $("applyBtn").addEventListener("click", loadFeedback);
+    $("refreshBtn").addEventListener("click", async () => {
+      await loadEventsIntoUI();
+      await loadFeedback();
+    });
+
+    // Initial load
+    (async function init() {
+      await loadEventsIntoUI();
+
+      const last = localStorage.getItem("lastSubmittedEventId");
+      if (last) $("eventSelect").value = last;
+
+      await loadFeedback();
+    })();
+  </script>
+
+</body>
+</html>
